@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Room Created • JAYK14 Meet</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+  <div class="bg-gray-800 p-6 rounded-xl shadow-lg max-w-lg text-center">
+    <h1 class="text-2xl font-bold mb-4">Room Created 🎉</h1>
+    <p class="mb-2">✅ Teacher Link:</p>
+    <input type="text" value="{{ teacher_link }}" class="w-full bg-gray-700 p-2 rounded mb-4" readonly>
+    
+    <p class="mb-2">👩‍🎓 Student Link:</p>
+    <input type="text" value="{{ student_link }}" class="w-full bg-gray-700 p-2 rounded mb-4" readonly>
+    
+    <a href="{% url 'end_room' room_id %}" 
+       class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg">End Room</a>
+  </div>
+</body>
+</html>

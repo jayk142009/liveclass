@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Meet Style Live Camera</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        function toggleRecording() {
+            fetch('/toggle_recording/')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('recStatus').innerText =
+                        data.recording ? "Recording..." : "Stopped";
+                    let btn = document.getElementById('recBtn');
+                    btn.innerText = data.recording ? "⏹ Stop" : "⏺ Record";
+                    btn.className = data.recording
+                        ? "bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full"
+                        : "bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full";
+                });
+        }
+    </script>
+</head>
+<body class="bg-gray-900 text-white flex flex-col h-screen">
+
+    <!-- Top bar -->
+    <header class="bg-gray-800 px-4 py-2 flex justify-between items-center shadow-lg">
+        <h1 class="text-lg font-semibold">JAYK14 Meet</h1>
+        <span id="recStatus" class="text-sm text-gray-300">Stopped</span>
+    </header>
+
+    <!-- Video Section -->
+    <main class="flex-1 flex items-center justify-center bg-black">
+        <img src="{% url 'video_feed' %}" class="max-h-full max-w-full rounded-lg shadow-lg border-4 border-gray-700" />
+    </main>
+
+    <!-- Bottom Controls -->
+    <footer class="bg-gray-800 px-4 py-3 flex justify-center gap-4 shadow-inner">
+        <button id="recBtn" onclick="toggleRecording()"
+            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full">
+            ⏺ Record
+        </button>
+        <button class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-full">
+            🎤 Mute
+        </button>
+        <button class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-full">
+            📷 Stop Video
+        </button>
+        <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full">
+            🚪 Leave
+        </button>
+    </footer>
+
+</body>
+</html>

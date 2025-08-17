@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Room: {{ room_name }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white flex flex-col min-h-screen">
+
+  <!-- Top Navbar -->
+  <header class="bg-gray-800 p-4 flex justify-between items-center shadow-md">
+    <h1 class="text-lg font-semibold">Live Class</h1>
+    <span class="bg-gray-700 px-3 py-1 rounded-md text-sm">Room: {{ room_name }}</span>
+    {% if role == "teacher" %}
+      <form action="{% url 'end_room' room_name %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="bg-red-600 px-3 py-1 rounded-md">End Room</button>
+      </form>
+    {% endif %}
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex flex-1 p-4 gap-4">
+    <!-- Video & Screen Area -->
+    <div class="flex-1 flex flex-col items-center gap-4">
+      <video id="preview" autoplay playsinline muted
+        class="w-full max-w-4xl rounded-xl shadow-lg border-2 border-gray-700 bg-black"></video>
+      <video id="screenPreview" autoplay playsinline
+        class="w-full max-w-4xl rounded-xl shadow-lg border-2 border-gray-700 bg-black hidden"></video>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="w-80 flex flex-col bg-gray-800 rounded-lg p-3 gap-4">
+      <!-- Chat Box -->
+      <div class="flex flex-col flex-1 border border-gray-700 rounded-lg p-2">
+        <h2 class="text-lg mb-2">💬 Chat</h2>
+        <div id="chatMessages" class="flex-1 overflow-y-auto space-y-1"></div>
+        <div class="flex mt-2">
+          <input id="chatInput" type="text" placeholder="Type a message..."
+            class="flex-1 p-2 rounded-l bg-gray-700 text-white focus:outline-none">
+          <button id="sendBtn" class="bg-blue-500 hover:bg-blue-600 px-4 rounded-r">Send</button>
+        </div>
+      </div>
+
+      <!-- Participants -->
+      <div class="border border-gray-700 rounded-lg p-2">
+        <h2 class="text-lg mb-2">👥 Participants</h2>
+        <ul id="participantsList" class="space-y-1">
+          <li>You (Online)</li>
+        </ul>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Bottom Controls -->
+  <footer class="bg-gray-800 p-4 flex justify-center gap-4 flex-wrap">
+    <button id="cameraBtn" class="bg-blue-500 hover:bg-blue-600 px-6 py-2 rounded-full">📷 Camera Off</button>
+    <button id="micBtn" class="bg-yellow-500 hover:bg-yellow-600 px-6 py-2 rounded-full">🎤 Mute</button>
+    <button id="shareScreenBtn" class="bg-purple-500 hover:bg-purple-600 px-6 py-2 rounded-full">🖥 Share Screen</button>
+    <button id="raiseHandBtn" class="bg-pink-500 hover:bg-pink-600 px-6 py-2 rounded-full">✋ Raise Hand</button>
+
+    {% if role == "teacher" %}
+    <!-- Recording controls sirf Teacher ke liye -->
+    <div id="recordingControls" class="flex gap-2">
+      <button id="startBtn" class="bg-green-500 hover:bg-green-600 px-6 py-2 rounded-full">⏺ Start Recording</button>
+      <button id="stopBtn" disabled class="bg-red-500 hover:bg-red-600 px-6 py-2 rounded-full disabled:opacity-50">⏹ Stop Recording</button>
+    </div>
+    {% endif %}
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+    let mediaRecorder;
+    let recordedChunks = [];
+    let localStream;
+    let screenStream;
+    let activeStream;
+
+    const preview = document.getElementById("preview");
+    const screenPreview = document.getElementById("screenPreview");
+    const cameraBtn = document.getElementById("cameraBtn");
+    const micBtn = document.getElementById("micBtn");
+    const shareScreenBtn = document.getElementById("shareScreenBtn");
+    const raiseHandBtn = document.getElementById("raiseHandBtn");
+    const chatMessages = document.getElementById("chatMessages");
+    const chatInput = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const participantsList = document.getElementById("participantsList");
+
+    // Init Camera & Mic
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        localStream = stream;
+        activeStream = localStream;
+        preview.srcObject = stream;
+      });
+
+    function initRecorder(stream) {
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: "video/webm" });
+        const formData = new FormData();
+        formData.append("recording", blob, `record_${Date.now()}.webm`);
+        fetch("/upload_recording/", { method: "POST", body: formData })
+          .then(res => res.json())
+          .then(data => showToast(data.status === "success" ? "✅ Upload successful!" : "❌ Upload failed"))
+          .catch(err => showToast("❌ Upload failed: " + err));
+      };
+    }
+
+    // Camera toggle
+    cameraBtn.addEventListener("click", () => {
+      const videoTrack = localStream.getVideoTracks()[0];
+      videoTrack.enabled = !videoTrack.enabled;
+      cameraBtn.textContent = videoTrack.enabled ? "📷 Camera Off" : "📷 Camera On";
+    });
+
+    // Mic toggle
+    micBtn.addEventListener("click", () => {
+      const audioTrack = localStream.getAudioTracks()[0];
+      audioTrack.enabled = !audioTrack.enabled;
+      micBtn.textContent = audioTrack.enabled ? "🎤 Mute" : "🎤 Unmute";
+    });
+
+    // Screen sharing
+    shareScreenBtn.addEventListener("click", async () => {
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const mixedStream = new MediaStream([
+          ...screenStream.getVideoTracks(),
+          ...localStream.getAudioTracks()
+        ]);
+        screenPreview.srcObject = screenStream;
+        screenPreview.classList.remove("hidden");
+        preview.classList.add("hidden");
+        activeStream = mixedStream;
+        screenStream.getVideoTracks()[0].addEventListener("ended", () => {
+          screenPreview.classList.add("hidden");
+          preview.classList.remove("hidden");
+          activeStream = localStream;
+        });
+      } catch (err) {
+        showToast("Screen sharing failed: " + err);
+      }
+    });
+
+    // Raise hand
+    raiseHandBtn.addEventListener("click", () => {
+      const li = document.createElement("li");
+      li.textContent = "✋ You raised hand";
+      participantsList.appendChild(li);
+      setTimeout(() => participantsList.removeChild(li), 5000);
+    });
+
+    // Chat
+    sendBtn.addEventListener("click", () => {
+      if (chatInput.value.trim() !== "") {
+        const msg = document.createElement("div");
+        msg.textContent = "You: " + chatInput.value;
+        chatMessages.appendChild(msg);
+        chatInput.value = "";
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    });
+
+    // Recording controls (only for teacher)
+    {% if role == "teacher" %}
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+
+    startBtn.addEventListener("click", () => {
+      recordedChunks = [];
+      initRecorder(activeStream);
+      mediaRecorder.start();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+    });
+
+    stopBtn.addEventListener("click", () => {
+      mediaRecorder.stop();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    });
+    {% endif %}
+
+    // Toast
+    function showToast(msg) {
+      const toast = document.createElement("div");
+      toast.className = "fixed bottom-5 right-5 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg";
+      toast.innerText = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Role toast
+    const ROLE = "{{ role }}";
+    if (ROLE === "teacher") showToast("You are Teacher 👨‍🏫");
+    else showToast("You are Student 👩‍🎓");
+  </script>
+
+</body>
+</html>
